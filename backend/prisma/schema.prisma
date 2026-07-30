@@ -12,8 +12,525 @@ datasource db {
   url = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Role {
+  CANDIDATE
+  RECRUITER
+  ADMIN
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+  TEMPORARY
+}
+
+enum WorkMode {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum ExperienceLevel {
+  INTERNSHIP
+  ENTRY
+  MID
+  SENIOR
+  LEAD
+  EXECUTIVE
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum ApplicationStatus {
+  APPLIED
+  UNDER_REVIEW
+  SHORTLISTED
+  INTERVIEW_SCHEDULED
+  OFFERED
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum SkillProficiency {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum LanguageProficiency {
+  BASIC
+  CONVERSATIONAL
+  FLUENT
+  NATIVE
+}
+
+enum CompanySize {
+  STARTUP_1_10
+  SMALL_11_50
+  MEDIUM_51_200
+  LARGE_201_1000
+  ENTERPRISE_1000_PLUS
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum NotificationType {
+  APPLICATION_STATUS
+  JOB_ALERT
+  MESSAGE
+  INTERVIEW
+  SYSTEM
+  ACCOUNT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  PASSWORD_RESET
+  STATUS_CHANGE
+}
+
+// ============================================================================
+// 1. AUTHENTICATION MODULE
+// ============================================================================
+
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  role              Role
+  isActive          Boolean   @default(true)
+  isEmailVerified   Boolean   @default(false)
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // 1-to-1 role profiles (a user is EXACTLY one of these, enforced at app layer)
+  candidateProfile  CandidateProfile?
+  recruiterProfile  RecruiterProfile?
+
+  // 1-to-many
+  refreshTokens     RefreshToken[]
+  sessions          UserSession[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isRevoked  Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// Optional: tracks active device/browser sessions independently of tokens
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress    String?
+  userAgent    String?
+  deviceLabel  String?
+  isValid      Boolean  @default(true)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([isValid])
+  @@map("user_sessions")
+}
+
+// ============================================================================
+// 2. CANDIDATE MODULE
+// ============================================================================
+
+model CandidateProfile {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName         String
+  lastName          String
+  phone             String?
+  dateOfBirth       DateTime?
+  profilePictureUrl String?
+  headline          String?
+  bio               String?
+  currentLocation   String?
+  expectedSalaryMin Int?
+  expectedSalaryMax Int?
+  currency          String?   @default("USD")
+  noticePeriodDays  Int?
+  isOpenToWork      Boolean   @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  resumes           Resume[]
+  educations        Education[]
+  experiences       Experience[]
+  candidateSkills   CandidateSkill[]
+  certifications    Certification[]
+  languages         Language[]
+  projects          Project[]
+  applications      Application[]
+  savedJobs         SavedJob[]
+
+  @@index([isOpenToWork])
+  @@index([currentLocation])
+  @@map("candidate_profiles")
+}
+
+model Resume {
+  id                  String            @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  title               String
+  fileUrl             String
+  fileSizeKb          Int?
+  isPrimary           Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  applications        Application[]
+
+  @@index([candidateProfileId])
+  @@index([candidateProfileId, isPrimary])
+  @@map("resumes")
+}
+
+model Education {
+  id                  String            @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  institution         String
+  degree              String
+  fieldOfStudy        String?
+  startDate           DateTime
+  endDate             DateTime?
+  grade               String?
+  description         String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([candidateProfileId])
+  @@map("educations")
+}
+
+model Experience {
+  id                  String            @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  companyName         String
+  jobTitle            String
+  employmentType      JobType?
+  location            String?
+  startDate           DateTime
+  endDate             DateTime?
+  isCurrent           Boolean           @default(false)
+  description         String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([candidateProfileId])
+  @@map("experiences")
+}
+
+// Master skill catalog — shared by candidates and jobs (many-to-many via junctions)
+model Skill {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  category        String?
+  createdAt       DateTime         @default(now())
+
+  candidateSkills CandidateSkill[]
+  jobSkills       JobSkill[]
+
+  @@index([category])
+  @@map("skills")
+}
+
+// Junction: CandidateProfile <-> Skill (many-to-many)
+model CandidateSkill {
+  id                  String            @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  skillId             String
+  skill               Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  proficiency         SkillProficiency  @default(INTERMEDIATE)
+  yearsOfExperience   Int?
+  createdAt           DateTime          @default(now())
+
+  @@unique([candidateProfileId, skillId])
+  @@index([skillId])
+  @@map("candidate_skills")
+}
+
+model Certification {
+  id                  String            @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  name                String
+  issuingOrganization String
+  issueDate           DateTime?
+  expiryDate          DateTime?
+  credentialId        String?
+  credentialUrl       String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([candidateProfileId])
+  @@map("certifications")
+}
+
+model Language {
+  id                  String              @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile    @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  name                String
+  proficiency         LanguageProficiency @default(CONVERSATIONAL)
+  createdAt           DateTime            @default(now())
+
+  @@unique([candidateProfileId, name])
+  @@map("languages")
+}
+
+model Project {
+  id                  String            @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  projectUrl          String?
+  repositoryUrl       String?
+  techStack           String[]
+  startDate           DateTime?
+  endDate             DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([candidateProfileId])
+  @@map("projects")
+}
+
+// ============================================================================
+// 3. RECRUITER MODULE
+// ============================================================================
+
+model Company {
+  id                  String              @id @default(cuid())
+  name                String
+  slug                String              @unique
+  logoUrl             String?
+  website             String?
+  industry            String?
+  companySize         CompanySize?
+  foundedYear         Int?
+  description         String?
+  headquarters        String?
+  verificationStatus  VerificationStatus  @default(UNVERIFIED)
+  verifiedAt          DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  recruiters          RecruiterProfile[]
+  jobs                Job[]
+
+  @@index([verificationStatus])
+  @@index([industry])
+  @@map("companies")
+}
+
+model RecruiterProfile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId        String
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  firstName        String
+  lastName         String
+  designation      String?
+  phone            String?
+  isCompanyAdmin   Boolean   @default(false)
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  jobsPosted       Job[]
+
+  @@index([companyId])
+  @@map("recruiter_profiles")
+}
+
+// ============================================================================
+// 4. JOB MODULE
+// ============================================================================
+
+model Job {
+  id                    String            @id @default(cuid())
+  companyId             String
+  company               Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  postedById            String
+  postedBy              RecruiterProfile  @relation(fields: [postedById], references: [id], onDelete: Restrict)
+
+  title                 String
+  slug                  String            @unique
+  description           String
+  responsibilities      String?
+  requirements          String?
+  jobType               JobType
+  workMode              WorkMode          @default(ONSITE)
+  experienceLevel       ExperienceLevel
+  minSalary             Int?
+  maxSalary             Int?
+  currency              String?           @default("USD")
+  location              String?
+  status                JobStatus         @default(DRAFT)
+  applicationDeadline   DateTime?
+  publishedAt           DateTime?
+  viewCount             Int               @default(0)
+
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  jobSkills             JobSkill[]
+  applications          Application[]
+  savedBy               SavedJob[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([jobType])
+  @@index([experienceLevel])
+  @@index([location])
+  @@index([publishedAt])
+  // Composite index for the most common public listing query
+  @@index([status, publishedAt])
+  @@map("jobs")
+}
+
+// Junction: Job <-> Skill (many-to-many)
+model JobSkill {
+  id          String           @id @default(cuid())
+  jobId       String
+  job         Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skillId     String
+  skill       Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  isRequired  Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+
+  @@unique([jobId, skillId])
+  @@index([skillId])
+  @@map("job_skills")
+}
+
+// Junction: CandidateProfile <-> Job (many-to-many, "bookmarks")
+model SavedJob {
+  id                  String            @id @default(cuid())
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  jobId               String
+  job                 Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt           DateTime          @default(now())
+
+  @@unique([candidateProfileId, jobId])
+  @@index([jobId])
+  @@map("saved_jobs")
+}
+
+model Application {
+  id                  String            @id @default(cuid())
+  jobId               String
+  job                 Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateProfileId  String
+  candidateProfile    CandidateProfile  @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+  resumeId            String
+  resume              Resume            @relation(fields: [resumeId], references: [id], onDelete: Restrict)
+
+  coverLetter         String?
+  status              ApplicationStatus @default(APPLIED)
+  appliedAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  // Reserved 1-to-many hooks for future modules — see extensibility notes
+  // interviews       Interview[]
+  // messages         Message[]
+
+  @@unique([jobId, candidateProfileId])
+  @@index([candidateProfileId])
+  @@index([status])
+  @@index([jobId, status])
+  @@map("applications")
+}
+
+// ============================================================================
+// 5. ADMINISTRATION MODULE
+// ============================================================================
+
+model Notification {
+  id         String            @id @default(cuid())
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  title      String
+  message    String
+  isRead     Boolean           @default(false)
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String       @id @default(cuid())
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      AuditAction
+  entityType  String
+  entityId    String
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime     @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
