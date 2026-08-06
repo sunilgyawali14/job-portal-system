@@ -12,6 +12,8 @@ export default function RegisterPage() {
     <AuthLayout
       title="Create your account"
       description="Join JobPortal and take the next step with confidence."
+      brandTitle="The work you want is waiting for you."
+      brandDescription="Create your profile once, then let the right opportunities find their way to you."
     >
       <form className="mt-8 space-y-5">
         <label className="block">

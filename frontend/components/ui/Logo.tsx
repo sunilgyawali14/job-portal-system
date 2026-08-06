@@ -3,9 +3,10 @@ import Link from "next/link";
 
 type JobPortalLogoProps = {
   compact?: boolean;
+  light?: boolean;
 };
 
-export function JobPortalLogo({ compact = false }: JobPortalLogoProps) {
+export function JobPortalLogo({ compact = false, light = false }: JobPortalLogoProps) {
   return (
     <Link
       aria-label="JobPortal home"
@@ -17,8 +18,8 @@ export function JobPortalLogo({ compact = false }: JobPortalLogoProps) {
         <ArrowUpRight aria-hidden="true" className="absolute -right-1 -top-1 size-4 rounded-full bg-paper p-0.5 text-indigo-500" strokeWidth={3} />
       </span>
       {!compact && (
-        <span className="font-display text-xl font-bold tracking-[-0.06em] text-ink">
-          JOB<span className="text-indigo-500">PORTAL</span>
+        <span className={`font-display text-xl font-bold tracking-[-0.06em] ${light ? "text-white" : "text-ink"}`}>
+          JOB<span className={light ? "text-blue-100" : "text-indigo-500"}>PORTAL</span>
         </span>
       )}
     </Link>

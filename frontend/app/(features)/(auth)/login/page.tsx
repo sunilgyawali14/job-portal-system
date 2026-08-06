@@ -7,6 +7,8 @@ export default function LoginPage() {
     <AuthLayout
       title="Welcome back"
       description="Log in to continue building your career story."
+      brandTitle="Your next great role is closer than you think."
+      brandDescription="Pick up where you left off, revisit saved roles, and keep the momentum going."
     >
       <form className="mt-8 space-y-5">
         <label className="block">

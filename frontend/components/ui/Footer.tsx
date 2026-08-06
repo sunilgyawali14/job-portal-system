@@ -13,7 +13,7 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <div className="grid gap-12 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div>
-            <JobPortalLogo />
+            <JobPortalLogo light />
             <p className="mt-5 max-w-xs text-sm leading-6 text-indigo-100/70">
               Helping ambitious people find work that moves them forward.
             </p>
