@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut, User as UserIcon } from "lucide-react";
 import { useState } from "react";
 import { JobPortalLogo } from "@/components/ui/Logo";
+import { useAuth } from "@/context/AuthContext";
 
 const navigation = [
   { href: "#home", label: "Home" },
@@ -14,6 +15,7 @@ const navigation = [
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, logoutUser } = useAuth();
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -35,12 +37,33 @@ export function Navbar() {
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Link className="rounded-lg px-4 py-2.5 text-sm font-bold text-indigo-600 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" href="/login">
-            Login
-          </Link>
-          <Link className="rounded-lg bg-indigo-500 px-4 py-2.5 text-sm font-bold text-white shadow-[0_8px_18px_rgba(74,71,232,0.24)] transition-all hover:-translate-y-0.5 hover:bg-indigo-600 hover:shadow-[0_12px_24px_rgba(74,71,232,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2" href="/register">
-            Register
-          </Link>
+          {user ? (
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-2 rounded-xl bg-indigo-50/80 px-3.5 py-2 text-sm font-semibold text-indigo-900 border border-indigo-100">
+                <UserIcon className="size-4 text-indigo-600" />
+                <span>{user.email}</span>
+                <span className="rounded-md bg-indigo-200/60 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                  {user.role}
+                </span>
+              </span>
+              <button
+                onClick={() => logoutUser()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-sm font-bold text-ink-soft hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors"
+              >
+                <LogOut className="size-4" />
+                Logout
+              </button>
+            </div>
+          ) : (
+            <>
+              <Link className="rounded-lg px-4 py-2.5 text-sm font-bold text-indigo-600 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" href="/login">
+                Login
+              </Link>
+              <Link className="rounded-lg bg-indigo-500 px-4 py-2.5 text-sm font-bold text-white shadow-[0_8px_18px_rgba(74,71,232,0.24)] transition-all hover:-translate-y-0.5 hover:bg-indigo-600 hover:shadow-[0_12px_24px_rgba(74,71,232,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2" href="/register">
+                Register
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -63,9 +86,31 @@ export function Navbar() {
                 {item.label}
               </Link>
             ))}
-            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-4">
-              <Link className="rounded-lg border border-indigo-100 px-4 py-2.5 text-center text-sm font-bold text-indigo-600" href="/login" onClick={closeMenu}>Login</Link>
-              <Link className="rounded-lg bg-indigo-500 px-4 py-2.5 text-center text-sm font-bold text-white" href="/register" onClick={closeMenu}>Register</Link>
+            <div className="mt-3 border-t border-line pt-4">
+              {user ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between rounded-xl bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">
+                    <span className="truncate">{user.email}</span>
+                    <span className="rounded bg-indigo-200/70 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                      {user.role}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      logoutUser();
+                      closeMenu();
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 py-2.5 text-sm font-bold text-red-600"
+                  >
+                    <LogOut className="size-4" /> Logout
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <Link className="rounded-lg border border-indigo-100 px-4 py-2.5 text-center text-sm font-bold text-indigo-600" href="/login" onClick={closeMenu}>Login</Link>
+                  <Link className="rounded-lg bg-indigo-500 px-4 py-2.5 text-center text-sm font-bold text-white" href="/register" onClick={closeMenu}>Register</Link>
+                </div>
+              )}
             </div>
           </div>
         </div>

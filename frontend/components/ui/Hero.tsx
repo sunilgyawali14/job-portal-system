@@ -1,16 +1,41 @@
-import { ArrowRight, MapPin, Search } from "lucide-react";
+"use client";
+
+import { ArrowRight, MapPin, Search, Sparkles, LogOut } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
 
 export function Hero() {
+  const { user, logoutUser } = useAuth();
+
   return (
     <section
       className="grain-canvas relative overflow-hidden bg-gradient-to-b from-white to-indigo-50/40 px-5 pb-20 pt-20 sm:px-8 sm:pb-28 sm:pt-28"
       id="home"
     >
       <div className="mx-auto max-w-5xl text-center">
-        <span className="inline-flex rounded-full border border-indigo-100 bg-paper px-3 py-1.5 text-xs font-bold text-indigo-600 shadow-sm">
-          ✦ Over 10,000 new opportunities this week
-        </span>
-        <h1 className="mx-auto mt-6 max-w-4xl font-display text-5xl font-bold tracking-[-0.065em] text-ink sm:text-6xl lg:text-7xl">
+        {user ? (
+          <div className="mb-6 inline-flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-indigo-200 bg-white/80 px-6 py-3.5 shadow-lg backdrop-blur-md">
+            <Sparkles className="size-5 text-indigo-500 animate-pulse" />
+            <span className="text-base font-bold text-ink">
+              Welcome back, <span className="text-indigo-600">{user.email}</span>! 👋
+            </span>
+            <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
+              {user.role}
+            </span>
+            <button
+              onClick={() => logoutUser()}
+              className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 underline"
+            >
+              <LogOut className="size-3" /> Logout
+            </button>
+          </div>
+        ) : (
+          <span className="inline-flex rounded-full border border-indigo-100 bg-paper px-3 py-1.5 text-xs font-bold text-indigo-600 shadow-sm">
+            ✦ Over 10,000 new opportunities this week
+          </span>
+        )}
+
+        <h1 className="mx-auto mt-4 max-w-4xl font-display text-5xl font-bold tracking-[-0.065em] text-ink sm:text-6xl lg:text-7xl">
           Find a job you’ll{" "}
           <span className="text-indigo-500">love to wake up for.</span>
         </h1>
