@@ -1,6 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 export interface User {
   id: string;
@@ -16,90 +21,249 @@ interface AuthContextType {
   loginUser: (user: User, accessToken: string) => void;
   logoutUser: () => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
+  authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+/**
+ * BACKEND REQUIREMENT — NOT YET ENFORCED HERE
+ * Note: credentials: "include" sends cookies automatically, but it does NOT protect against CSRF attacks.
+ * The backend MUST set the refresh-token cookie with SameSite=Strict or SameSite=Lax,
+ * and should validate a CSRF token on state-changing requests (login, logout, refresh, etc.).
+ */
+
+let refreshPromise: Promise<string | null> | null = null;
+
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  /**
+   * Helper function to fetch current user profile from GET /api/auth/me
+   */
+  const fetchCurrentUser = async (token: string): Promise<User | null> => {
     try {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-        // Try to refresh the access token silently on page load
-        refreshAccessToken();
+      const res = await fetch(`${API_URL}/api/auth/me`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        return null;
       }
-    } catch {
-      localStorage.removeItem("user");
-    } finally {
-      setLoading(false);
+
+      const data = await res.json();
+      return data.data?.user || data.user || null;
+    } catch (error) {
+      console.error("Fetch current user failed:", error);
+      return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  };
+
+  /**
+   * Silently refresh the access token using
+   * the HttpOnly refresh token cookie.
+   * Deduplicates concurrent refresh requests using refreshPromise.
+   */
+  const refreshAccessToken = async (): Promise<string | null> => {
+    if (refreshPromise) {
+      return refreshPromise;
+    }
+
+    refreshPromise = (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          setUser(null);
+          setAccessToken(null);
+
+          return null;
+        }
+
+        const data = await res.json();
+
+        const newToken = data.data?.accessToken;
+
+        if (!newToken) {
+          setUser(null);
+          setAccessToken(null);
+
+          return null;
+        }
+
+        setAccessToken(newToken);
+
+        return newToken;
+      } catch (error) {
+        console.error("Token refresh failed:", error);
+
+        setUser(null);
+        setAccessToken(null);
+
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+
+    return refreshPromise;
+  };
+
+  /**
+   * Restore authentication state when the application loads.
+   */
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        // Verify/refresh the session using the HttpOnly cookie.
+        const token = await refreshAccessToken();
+
+        if (!token) {
+          setUser(null);
+          setAccessToken(null);
+          return;
+        }
+
+        const currentUser = await fetchCurrentUser(token);
+
+        if (!currentUser) {
+          setUser(null);
+          setAccessToken(null);
+          return;
+        }
+
+        setUser(currentUser);
+      } catch (error) {
+        console.error("Auth initialization failed:", error);
+
+        setUser(null);
+        setAccessToken(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  /**
+   * Listen for cross-tab logout events.
+   */
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "auth:logout") {
+        setUser(null);
+        setAccessToken(null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
 
   const loginUser = (userData: User, token: string) => {
     setUser(userData);
     setAccessToken(token);
-    localStorage.setItem("user", JSON.stringify(userData));
   };
 
   const logoutUser = async () => {
     try {
       await fetch(`${API_URL}/api/auth/logout`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // sends refreshToken cookie
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
       });
-    } catch (err) {
-      console.error("Logout request failed:", err);
+    } catch (error) {
+      console.error("Logout request failed:", error);
     } finally {
       setUser(null);
       setAccessToken(null);
-      localStorage.removeItem("user");
+      localStorage.setItem("auth:logout", Date.now().toString());
     }
   };
 
   /**
-   * Silently refresh the access token using the HttpOnly refresh token cookie.
-   * Returns the new access token or null if refresh failed.
+   * Authenticated fetch wrapper that attaches Authorization token
+   * and automatically retries once on 401 response status.
    */
-  const refreshAccessToken = async (): Promise<string | null> => {
-    try {
-      const res = await fetch(`${API_URL}/api/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // sends refreshToken cookie
-      });
+  const authFetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
+    let hasRetried = false;
 
-      if (!res.ok) {
-        // Refresh failed — user needs to log in again
-        setUser(null);
-        setAccessToken(null);
-        localStorage.removeItem("user");
-        return null;
+    const makeRequest = async (token: string | null): Promise<Response> => {
+      const headers = new Headers(init?.headers);
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
       }
 
-      const data = await res.json();
-      const newToken = data.data?.accessToken;
+      const requestInit: RequestInit = {
+        ...init,
+        headers,
+        credentials: "include",
+      };
+
+      return await fetch(input, requestInit);
+    };
+
+    let response = await makeRequest(accessToken);
+
+    if (response.status === 401 && !hasRetried) {
+      hasRetried = true;
+      const newToken = await refreshAccessToken();
+
       if (newToken) {
-        setAccessToken(newToken);
-        return newToken;
+        response = await makeRequest(newToken);
+
+        if (response.status === 401) {
+          await logoutUser();
+          throw new Error("Unauthorized: Session expired");
+        }
+      } else {
+        await logoutUser();
+        throw new Error("Unauthorized: Refresh failed");
       }
-      return null;
-    } catch {
-      return null;
     }
+
+    return response;
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, accessToken, loading, loginUser, logoutUser, refreshAccessToken }}
+      value={{
+        user,
+        accessToken,
+        loading,
+        loginUser,
+        logoutUser,
+        refreshAccessToken,
+        authFetch,
+      }}
     >
       {children}
     </AuthContext.Provider>
@@ -108,8 +272,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
+
   return context;
 }
